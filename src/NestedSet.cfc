@@ -24,6 +24,10 @@
 		<cfargument name="scope" type="string" required="false" default="" />
 		<cfargument name="instantiateOnDelete" type="boolean" required="false" default="false" />
 		<cfscript>
+			var loc = {
+				newCallbacks = "beforeMove,afterMove"
+			};
+		
 			variables.wheels.class.nestedSet = {
 				  parentColumn = arguments.parentColumn
 				, leftColumn = arguments.leftColumn
@@ -33,7 +37,6 @@
 			};
 			
 			beforeCreate(methods="$setDefaultLeftAndRight");
-			beforeSave(methods="$storeNewParent");
 			afterSave(methods="$moveToNewParent");
 			beforeDelete(methods="$deleteDecendants");
 			
@@ -41,7 +44,6 @@
 			property(name="leaf", sql="(#getRightColumn()# - #getLeftColumn()#)");
 			
 			// allow for our two new types of callbacks
-			loc.newCallbacks = "beforeMove,afterMove";
 			loc.iEnd = ListLen(loc.newCallbacks);
 			for (loc.i=1; loc.i <= loc.iEnd; loc.i++)
 				variables.wheels.class.callbacks[ListGetAt(loc.newCallbacks, loc.i)] = ArrayNew(1);
@@ -497,18 +499,14 @@
 	-------------------------------------------------------------------------------------
 	------------------------------------------------------------------------------------>
 	
-	<cffunction name="$storeNewParent" returntype="boolean" access="public" output="false" mixin="model">
-		<cfset this.moveToNewParentId = IIf(hasChanged(property=getParentColumn()), "this[getParentColumn()]", "false") />
-		<cfreturn true />
-	</cffunction> 
-	
 	<cffunction name="$moveToNewParent" returntype="boolean" access="public" output="false" mixin="model">
 		<cfscript>
-			if (not StructKeyExists(this, "moveToNewParentId"))
-				moveToRoot();
-			else if (this.moveToNewParentId)
-				moveToChildOf(this.moveToNewParentId);
+			if (not IsNumeric(this[getParentColumn()]))
+				moveToRoot(); // if empty then we are a root node, make sure where are there
+			else
+				moveToChildOf(this[getParentColumn()]);
 		</cfscript>
+		<cfreturn true /><!--- force the save even if we did nothing --->
 	</cffunction>
 	
 	
@@ -537,31 +535,29 @@
 				  where = $createScopedWhere("#getLeftColumn()# > #this[getLeftColumn()]# AND #getRightColumn()# < #this[getRightcolumn()]#")
 			};	
 			
-			if (not Len(this[getRightColumn()]) or not Len(this[getLeftColumn()]) or this.skipBeforeDestroy)
+			if (not Len(this[getRightColumn()]) or not Len(this[getLeftColumn()]))
 				return true;	
 		</cfscript>
-		<cftransaction action="begin">
-			<cfscript>
-				if (StructKeyExists(arguments, "where") and Len(arguments.where))
-					arguments.where = arguments.where & " AND " & loc.where;
-				else
-					arguments.where = loc.where;
-				
-				deleteAll(argumentCollection=arguments, instantiate=getIsnstantiateOnDelete());
+		<cfscript>
+			if (StructKeyExists(arguments, "where") and Len(arguments.where))
+				arguments.where = arguments.where & " AND " & loc.where;
+			else
+				arguments.where = loc.where;
 			
-				loc.diff = this[getRightcolumn()] - this[getLeftColumn()] + 1;
-			</cfscript>
-	
-			<cfquery datasource="#variables.wheels.class.connection.datasource#" name="loc.query">
-				UPDATE #tableName()# 
-				SET #getLeftColumn()# = #getLeftColumn()# - #loc.diff# 
-				WHERE #$createScopedWhere("#getLeftColumn()# > #this[getRightColumn()]#")#;
-				
-				UPDATE #tableName()# 
-				SET #getRightcolumn()# = #getRightcolumn()# - #loc.diff# 
-				WHERE #$createScopedWhere("#getRightColumn()# > #this[getRightColumn()]#")#;
-			</cfquery>
-		</cftransaction>
+			deleteAll(argumentCollection=arguments, instantiate=getInstantiateOnDelete());
+		
+			loc.diff = this[getRightcolumn()] - this[getLeftColumn()] + 1;
+		</cfscript>
+
+		<cfquery datasource="#variables.wheels.class.connection.datasource#" name="loc.query">
+			UPDATE #tableName()# 
+			SET #getLeftColumn()# = #getLeftColumn()# - #loc.diff# 
+			WHERE #$createScopedWhere("#getLeftColumn()# > #this[getRightColumn()]#")#;
+			
+			UPDATE #tableName()# 
+			SET #getRightcolumn()# = #getRightcolumn()# - #loc.diff# 
+			WHERE #$createScopedWhere("#getRightColumn()# > #this[getRightColumn()]#")#;
+		</cfquery>
 		<cfreturn true />
 	</cffunction>
 	
