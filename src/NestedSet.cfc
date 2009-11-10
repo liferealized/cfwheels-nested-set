@@ -506,7 +506,7 @@
 	--->
 	<cffunction name="rightSibling" returntype="any" access="public" output="false">
 		<cfscript>
-			arguments.where = $createScopedWhere("#$getLeftColumn()# = #this[$getRightColumn()] + 1#");
+			arguments.where = $createScopedWhere("#$getLeftColumn()# = #this[$getRightColumn()] + 1# AND #$getParentColumn()# = #this[$getParentColumn()]#");
 			arguments.order = $defaultOrder();
 		</cfscript>
 		<cfreturn findOne(argumentCollection=arguments) />
@@ -615,7 +615,7 @@
 	<cffunction name="$setDefaultLeftAndRight" returntype="boolean" access="public" output="false" mixin="model">
 		<cfscript>
 			var loc = {
-				  maxRight = this.maximum(property=getRightColumn())
+				  maxRight = this.maximum(property=$getRightColumn())
 				, leftColumn = loc.maxRight + 1
 				, rightColumn = loc.maxRight + 2
 			};
