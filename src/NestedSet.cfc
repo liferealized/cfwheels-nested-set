@@ -9,11 +9,8 @@
 	Authors:	James Gibson 	(me@iamjamesgibson.com)
 				Andy Bellenie 	(andybellenie@gmail.com)
 
-	History:	Created 	2009-10-31	James Gibson - First commit
-				Modified 	2009-11-05 	Andy Bellenie - Added cfqueryparams, support for non-numeric keys, extra validation, bug fixes
-
 	Notes:		Ported from Awesome Nested Sets for Rails
-				http://github.com/collectiveidea/awesome_nested_set 
+				http://github.com/collectiveidea/awesome_nested_set
 
 	Usage:		Use hasNestedSet() in your model init to setup for the methods below
 				defaults
@@ -141,10 +138,7 @@
 
 	<cffunction name="$propertyIsInteger" returntype="boolean" access="public" output="false" mixin="model">
 		<cfargument name="property" type="string" required="true">
-		<cfif ListFindNoCase("cf_sql_integer,cf_sql_bigint,cf_sql_tinyint,cf_sql_smallint",variables.wheels.class.properties[arguments.property].type)>
-			<cfreturn true>
-		</cfif>
-		<cfreturn false>
+		<cfreturn ListFindNoCase("cf_sql_integer,cf_sql_bigint,cf_sql_tinyint,cf_sql_smallint",variables.wheels.class.properties[arguments.property].type)>
 	</cffunction>
 
 	<cffunction name="$idIsValid" returntype="boolean" access="public" output="false" mixin="model">
@@ -462,13 +456,13 @@
 	
 	<cffunction name="isDescendantOf" returntype="boolean" access="public" output="false">
 		<cfargument name="other" type="any" required="true" />
-		<cfset arguments.other = $getObject(arguments.other, "other") />
+		<cfset arguments.other = $getObject(arguments.other) />
 		<cfreturn (arguments.other[$getLeftColumn()] lt this[$getLeftColumn()] and this[$getLeftColumn()] lt arguments.other[$getRightColumn()] and isSameScope(arguments.other)) />
 	</cffunction>
 	
 	<cffunction name="isAncestorOf" returntype="boolean" access="public" output="false">
 		<cfargument name="other" type="any" required="true" />
-		<cfset arguments.other = $getObject(arguments.other, "other") />
+		<cfset arguments.other = $getObject(arguments.other) />
 		<cfreturn (this[$getLeftColumn()] lt arguments.other[$getLeftColumn()] and arguments.other[$getLeftColumn()] lt this[$getRightColumn()] and isSameScope(arguments.other)) />
 	</cffunction>
 	
@@ -484,7 +478,7 @@
 			
 			if (Len($getScope()))
 			{
-				arguments.other = $getObject(arguments.other, "other");
+				arguments.other = $getObject(arguments.other);
 				for (loc.i=1; loc.i lte loc.iEnd; loc.i++)
 					if (this[ListGetAt($getScope(), loc.i)] != other[ListGetAt($getScope(), loc.i)])
 						return false;
@@ -498,7 +492,7 @@
 	--->
 	<cffunction name="leftSibling" returntype="any" access="public" output="false">
 		<cfscript>
-			arguments.where = $createScopedWhere("#$getRightColumn()# = #this[$getLeftColumn()] - 1#");
+			arguments.where = $createScopedWhere("#$getRightColumn()# = #this[$getLeftColumn()] - 1# AND #$getParentColumn()# = #this[$getParentColumn()]#");
 			arguments.order = $defaultOrder();
 		</cfscript>
 		<cfreturn findOne(argumentCollection=arguments) />
@@ -509,7 +503,7 @@
 	--->
 	<cffunction name="rightSibling" returntype="any" access="public" output="false">
 		<cfscript>
-			arguments.where = $createScopedWhere("#$getLeftColumn()# = #this[$getRightColumn()] + 1#");
+			arguments.where = $createScopedWhere("#$getLeftColumn()# = #this[$getRightColumn()] + 1# AND #$getParentColumn()# = #this[$getParentColumn()]#");
 			arguments.order = $defaultOrder();
 		</cfscript>
 		<cfreturn findOne(argumentCollection=arguments) />
@@ -534,7 +528,7 @@
 	--->
 	<cffunction name="moveToLeftOf" returntype="boolean" access="public" output="false" mixin="model">
 		<cfargument name="target" type="any" required="true">
-		<cfset arguments.target = $getObject(arguments.target, "other")>
+		<cfset arguments.target = $getObject(arguments.target)>
 		<cfif IsObject(arguments.target)>
 			<cfreturn $moveTo(arguments.target,"left")>
 		</cfif>
@@ -546,7 +540,7 @@
 	--->
 	<cffunction name="moveToRightOf" returntype="boolean" access="public" output="false" mixin="model">
 		<cfargument name="target" type="any" required="true">
-		<cfset arguments.target = $getObject(arguments.target, "other")>
+		<cfset arguments.target = $getObject(arguments.target)>
 		<cfif IsObject(arguments.target)>
 			<cfreturn $moveTo(arguments.target, "right")>
 		</cfif>
@@ -558,7 +552,7 @@
 	--->
 	<cffunction name="moveToChildOf" returntype="boolean" access="public" output="false" mixin="model">
 		<cfargument name="target" type="any" required="true">
-		<cfset arguments.target = $getObject(arguments.target, "other")>
+		<cfset arguments.target = $getObject(arguments.target)>
 		<cfif IsObject(arguments.target)>
 			<cfreturn $moveTo(arguments.target, "child")>
 		</cfif>
@@ -602,29 +596,30 @@
 	
 	<cffunction name="$moveToNewParent" returntype="boolean" access="public" output="false" mixin="model">
 		<cfscript>
-			var parent = $getObject(this[$getParentColumn()],'parent');
+			var parent = $getObject(this[$getParentColumn()]);
+			// valid parent, so insert underneath it
 			if (IsObject(parent))
 				if (not isSameScope(parent))
 					$throw(type="Wheels.Plugins.NestedSet.ScopeMismatch",message="The supplied parent is not within the same scope as the item you are trying to insert.");
 				else
 					moveToChildOf(parent);
-			else
-				moveToRoot(); // if empty or a different scope then we are a root node*/
+			// return true even if we did nothing as the node has already been inserted at root level
+			return true;
 		</cfscript>
-		<cfreturn true><!--- force the save even if we did nothing --->
 	</cffunction>
 	
 	
-	<cffunction name="$setDefaultLeftAndRight" returntype="boolean" access="public" output="false" mixin="model">
+	<cffunction name="$setDefaultLeftAndRight" returntype="void" access="public" output="false" mixin="model">
 		<cfscript>
 			var loc = {
-				  where = $createScopedWhere()
+				  maxRight = this.maximum(property=$getRightColumn())
+				, leftColumn = loc.maxRight + 1
+				, rightColumn = loc.maxRight + 2
 			};
-			loc.maxRight = this.maximum(property=$getRightColumn(), where=loc.where);
-			this[$getLeftColumn()] = loc.maxRight + 1;
-			this[$getRightColumn()] = loc.maxRight + 2;
+			
+			this[$getLeftColumn()] = loc.leftColumn;
+			this[$getRightColumn()] = loc.rightColumn;
 		</cfscript>
-		<cfreturn true />
 	</cffunction>
 	
 	<!---
@@ -670,7 +665,7 @@
 	
 	<!---
 		core private method used to move items around in the tree
-		update is scoped accordingly
+		update should not be scoped since the entire table is one big tree
 	--->
 	<cffunction name="$moveTo" returntype="any" access="public" output="false" mixin="model">
 		<cfargument name="target" type="any" required="true" />
@@ -757,12 +752,6 @@
 																</cfif>
 													ELSE #$getParentColumn()#
 												END
-				<cfif ListLen($getScope()) gt 0>
-					<cfloop from="1" to="#ListLen($getScope())#" index="i">
-						<cfset loc.property = ListGetAt($getScope(),i)>
-						<cfif i gt 1>AND<cfelse>WHERE</cfif> #loc.property# = <cfqueryparam cfsqltype="#variables.wheels.class.properties[loc.property].type#" value="#this[loc.property]#">
-					</cfloop>
-				</cfif>
 			</cfquery>
 			
 			<cfscript>
@@ -815,7 +804,6 @@
 	--->
 	<cffunction name="$getObject" returntype="any" access="public" output="false" mixin="model">
 		<cfargument name="identifier" type="any" required="true" hint="An id or object" />
-		<cfargument name="argumentName" type="string" required="true" />
 		<cfscript>
 			if (IsObject(arguments.identifier))
 				return arguments.identifier;
