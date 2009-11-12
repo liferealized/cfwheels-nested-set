@@ -49,7 +49,7 @@
 			afterSave(methods="$moveToNewParent");
 			beforeDelete(methods="$deleteDescendants");
 			// add in a calculated property for the leaf value
-			property(name="leaf", sql="(#arguments.rightColumn# - #arguments.leftColumn#)");
+			property(name="leaf", sql="#arguments.rightColumn# - #arguments.leftColumn#");
 			// allow for the two new types of callbacks
 			variables.wheels.class.callbacks.beforeMove = ArrayNew(1);
 			variables.wheels.class.callbacks.afterMove = ArrayNew(1);
@@ -436,6 +436,22 @@
 			<cfreturn 1>
 		</cfif>
 		<cfreturn selfAndAncestors(returnAs="query").RecordCount>
+	</cffunction>
+
+
+	<cffunction name="selfAndChildren" returntype="any" access="public" output="false" hint="I return the current node and its immediate children.">
+		<cfargument name="where" type="string" required="false" default="">
+		<cfargument name="order" type="string" required="false" default="#$getLeftColumn()# ASC">
+		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getLeftColumn()# >= #this[$getLeftColumn()]# AND #$getRightColumn()# <= #this[$getRightColumn()]# AND (#$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])# OR #$getIdColumn()# #$formatIdForQuery(this[$getIdColumn()])#)")>
+		<cfreturn findAll(argumentCollection=arguments) />
+	</cffunction>
+
+
+	<cffunction name="children" returntype="any" access="public" output="false" hint="I return the current node's immediate children.">
+		<cfargument name="where" type="string" required="false" default="">
+		<cfargument name="order" type="string" required="false" default="#$getLeftColumn()# ASC">
+		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getLeftColumn()# > #this[$getLeftColumn()]# AND #$getRightColumn()# < #this[$getRightColumn()]# AND #$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])#")>
+		<cfreturn findAll(argumentCollection=arguments) />
 	</cffunction>
 
 
