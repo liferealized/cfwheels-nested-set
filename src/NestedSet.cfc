@@ -31,7 +31,7 @@
 	</cffunction>
 		
 		
-	<cffunction name="hasNestedSet" returntype="void" access="public" output="false" mixin="model">
+	<cffunction name="actsAsNestedSet" returntype="void" access="public" output="false" mixin="model">
 		<cfargument name="idColumn" type="string" default="">
 		<cfargument name="parentColumn" type="string" default="parentId">
 		<cfargument name="leftColumn" type="string" default="lft">
@@ -476,6 +476,7 @@
 				if (this[ListGetAt($getScope(), loc.i)] != arguments.target[ListGetAt($getScope(), loc.i)])
 					return false;
 		</cfscript>
+		<cfreturn true />
 	</cffunction>
 	
 
@@ -594,11 +595,15 @@
 		<cfscript>
 			var loc = {};	
 			
-			// andybellenie 20091105: not sure what this is for...
+			// make sure this method can only run on the original object
+			if (StructKeyExists(request, "deleteDescendantsCalled"))
+				return true;
+			
 			if (not IsNumeric(this[$getRightColumn()]) or not IsNumeric(this[$getLeftColumn()]))
 				return true;
-				
-			arguments.where = $createScopedWhere("#$getLeftColumn()# > #this[$getLeftColumn()]# AND #$getRightColumn()# < #this[$getRightColumn()]#");
+
+			arguments.where = $createScopedWhere(where="", append="#$getLeftColumn()# > #this[$getLeftColumn()]# AND #$getRightColumn()# < #this[$getRightColumn()]#");
+			request.deleteDescendantsCalled = true;
 			deleteAll(argumentCollection=arguments, instantiate=$getInstantiateOnDelete());
 			loc.diff = this[$getRightColumn()] - this[$getLeftColumn()] + 1;
 		</cfscript>
