@@ -12,7 +12,7 @@
 	Notes:		Ported from Awesome Nested Sets for Rails
 				http://github.com/collectiveidea/awesome_nested_set
 
-	Usage:		Use hasNestedSet() in your model init to setup for the methods below
+	Usage:		Use actsAsNestedSet() in your model init to setup for the methods below
 				defaults
 					- idColumn = '' (defaults to the primary key during validation)
 					- parentColumn = 'parentId'
@@ -31,7 +31,7 @@
 	</cffunction>
 		
 		
-	<cffunction name="hasNestedSet" returntype="void" access="public" output="false" mixin="model">
+	<cffunction name="actsAsNestedSet" returntype="void" access="public" output="false" mixin="model">
 		<cfargument name="idColumn" type="string" default="">
 		<cfargument name="parentColumn" type="string" default="parentId">
 		<cfargument name="leftColumn" type="string" default="lft">
@@ -410,7 +410,6 @@
 		<cfreturn findAll(argumentCollection=arguments) />
 	</cffunction>
 	
-	
 	<cffunction name="isDescendantOf" returntype="boolean" access="public" output="false" hint="I return true if the current node is a descendant of the supplied node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfset arguments.target = $getObject(arguments.target)>
@@ -464,7 +463,6 @@
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfscript>
 			var loc = {};
-			
 			// check target object exists
 			arguments.target = $getObject(arguments.target);
 			if (not IsObject(arguments.target))
@@ -478,6 +476,7 @@
 				if (this[ListGetAt($getScope(), loc.i)] != arguments.target[ListGetAt($getScope(), loc.i)])
 					return false;
 		</cfscript>
+		<cfreturn true />
 	</cffunction>
 	
 
@@ -506,7 +505,6 @@
 		<cfreturn moveToRightOf(rightSibling())>
 	</cffunction>
 
-	
 	<cffunction name="moveToLeftOf" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node to the left of the target node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfset arguments.target = $getObject(arguments.target)>
@@ -516,7 +514,6 @@
 		<cfreturn false>
 	</cffunction>
 	
-	
 	<cffunction name="moveToRightOf" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node to the right of the target node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfset arguments.target = $getObject(arguments.target)>
@@ -525,7 +522,6 @@
 		</cfif>
 		<cfreturn false>
 	</cffunction>
-	
 	
 	<cffunction name="moveToChildOf" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node underneath the target node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
@@ -565,12 +561,12 @@
 	<cffunction name="$moveToNewParent" returntype="boolean" access="public" output="false" mixin="model">
 		<cfscript>
 			var parent = $getObject(this[$getParentColumn()]);
-			// valid parent, so insert underneath it
 			if (IsObject(parent))
-				if (not isSameScope(parent))				
+				if (not isSameScope(parent)) {			
 					$throw(type="Wheels.Plugins.NestedSet.ScopeMismatch",message="The supplied parent is not within the same scope as the item you are trying to insert.");
-				else
+				} else {
 					moveToChildOf(parent);
+				}
 			// return true even if we did nothing as the node has already been inserted at root level
 			return true;
 		</cfscript>
@@ -579,14 +575,10 @@
 	
 	<cffunction name="$setDefaultLeftAndRight" returntype="void" access="public" output="false" mixin="model">
 		<cfscript>
-			var loc = {
-				  maxRight = this.maximum(property=$getRightColumn())
-				, leftColumn = loc.maxRight + 1
-				, rightColumn = loc.maxRight + 2
-			};
-			
-			this[$getLeftColumn()] = loc.leftColumn;
-			this[$getRightColumn()] = loc.rightColumn;
+			this[$getLeftColumn()] = this.maximum(property=$getRightColumn());
+			if (not IsNumeric(this[$getLeftColumn()]))
+				this[$getLeftColumn()] = 1;
+			this[$getRightColumn()] = this[$getLeftColumn()] + 1
 		</cfscript>
 	</cffunction>
 	
@@ -599,11 +591,15 @@
 		<cfscript>
 			var loc = {};	
 			
-			// andybellenie 20091105: not sure what this is for...
+			// make sure this method can only run on the original object
+			if (StructKeyExists(request, "deleteDescendantsCalled"))
+				return true;
+			
 			if (not IsNumeric(this[$getRightColumn()]) or not IsNumeric(this[$getLeftColumn()]))
 				return true;
-				
-			arguments.where = $createScopedWhere("#$getLeftColumn()# > #this[$getLeftColumn()]# AND #$getRightColumn()# < #this[$getRightColumn()]#");
+
+			arguments.where = $createScopedWhere(where="", append="#$getLeftColumn()# > #this[$getLeftColumn()]# AND #$getRightColumn()# < #this[$getRightColumn()]#");
+			request.deleteDescendantsCalled = true;
 			deleteAll(argumentCollection=arguments, instantiate=$getInstantiateOnDelete());
 			loc.diff = this[$getRightColumn()] - this[$getLeftColumn()] + 1;
 		</cfscript>
