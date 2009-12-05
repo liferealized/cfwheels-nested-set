@@ -586,7 +586,7 @@
 			this[$getLeftColumn()] = this.maximum(property=$getRightColumn());
 			if (not IsNumeric(this[$getLeftColumn()]))
 				this[$getLeftColumn()] = 1;
-			this[$getRightColumn()] = this[$getLeftColumn()] + 1
+			this[$getRightColumn()] = this[$getLeftColumn()] + 1;
 		</cfscript>
 	</cffunction>
 	
