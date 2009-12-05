@@ -1,4 +1,4 @@
-<cfcomponent displayname="Nested Sets for CF Wheels">
+<cfcomponent output="false" displayname="Nested Sets for CF Wheels" mixin="model">
 
 	<!-----------------------------------------------------------------------------------
 	-------------------------------------------------------------------------------------
@@ -26,12 +26,11 @@
 	------------------------------------------------------------------------------------>	
 	
 	<cffunction name="init" access="public" output="false" returntype="any">
-		<cfset this.version = 1.0 />
+		<cfset this.version = "1.0,1.1" />
 		<cfreturn this />
 	</cffunction>
-		
-		
-	<cffunction name="actsAsNestedSet" returntype="void" access="public" output="false" mixin="model">
+
+	<cffunction name="actsAsNestedSet" returntype="void" access="public" output="false">
 		<cfargument name="idColumn" type="string" default="">
 		<cfargument name="parentColumn" type="string" default="parentId">
 		<cfargument name="leftColumn" type="string" default="lft">
@@ -46,6 +45,7 @@
 			variables.wheels.class.nestedSet.isValidated = false;
 			// set callbacks
 			beforeCreate(methods="$setDefaultLeftAndRight");
+			beforeSave(methods="$storeNewParent");
 			afterSave(methods="$moveToNewParent");
 			beforeDelete(methods="$deleteDescendants");
 			// add in a calculated property for the leaf value
@@ -63,42 +63,42 @@
 	-------------------------------------------------------------------------------------
 	------------------------------------------------------------------------------------>	
 	
-	<cffunction name="$getIdColumn" returntype="string" access="public" output="false" mixin="model">
+	<cffunction name="$getIdColumn" returntype="string" access="public" output="false">
 		<cfset $validateNestedSet()>
 		<cfreturn variables.wheels.class.nestedSet.idColumn />
 	</cffunction>
 
-	<cffunction name="$getIdType" returntype="string" access="public" output="false" mixin="model">
+	<cffunction name="$getIdType" returntype="string" access="public" output="false">
 		<cfset $validateNestedSet()>
 		<cfreturn variables.wheels.class.properties[variables.wheels.class.nestedSet.idColumn].type />
 	</cffunction>
 
-	<cffunction name="$getParentColumn" returntype="string" access="public" output="false" mixin="model">
+	<cffunction name="$getParentColumn" returntype="string" access="public" output="false">
 		<cfset $validateNestedSet()>
 		<cfreturn variables.wheels.class.nestedSet.parentColumn />
 	</cffunction>
 	
-	<cffunction name="$getLeftColumn" returntype="string" access="public" output="false" mixin="model">
+	<cffunction name="$getLeftColumn" returntype="string" access="public" output="false">
 		<cfset $validateNestedSet()>
 		<cfreturn variables.wheels.class.nestedSet.leftColumn />
 	</cffunction>
 	
-	<cffunction name="$getRightColumn" returntype="string" access="public" output="false" mixin="model">
+	<cffunction name="$getRightColumn" returntype="string" access="public" output="false">
 		<cfset $validateNestedSet()>
 		<cfreturn variables.wheels.class.nestedSet.rightColumn />
 	</cffunction>
 	
-	<cffunction name="$getScope" returntype="string" access="public" output="false" mixin="model">
+	<cffunction name="$getScope" returntype="string" access="public" output="false">
 		<cfset $validateNestedSet()>
 		<cfreturn variables.wheels.class.nestedSet.scope />
 	</cffunction>
 	
-	<cffunction name="$getInstantiateOnDelete" returntype="boolean" access="public" output="false" mixin="model">
+	<cffunction name="$getInstantiateOnDelete" returntype="boolean" access="public" output="false">
 		<cfset $validateNestedSet()>
 		<cfreturn variables.wheels.class.nestedSet.instantiateOnDelete />
 	</cffunction>
 
-	<cffunction name="$idsAreNullable" returntype="boolean" access="public" output="false" mixin="model">
+	<cffunction name="$idsAreNullable" returntype="boolean" access="public" output="false">
 		<cfset $validateNestedSet()>
 		<cfreturn variables.wheels.class.nestedSet.idsAreNullable />
 	</cffunction>
@@ -109,7 +109,7 @@
 		plugin validation
 	--->
 
-	<cffunction name="$validateNestedSet" returntype="void" access="public" output="false" mixin="model">
+	<cffunction name="$validateNestedSet" returntype="void" access="public" output="false">
 		<cfscript>
 			var loc = {};
 
@@ -144,13 +144,13 @@
 	-------------------------------------------------------------------------------------
 	------------------------------------------------------------------------------------>	
 
-	<cffunction name="$propertyIsInteger" returntype="boolean" access="public" output="false" mixin="model">
+	<cffunction name="$propertyIsInteger" returntype="boolean" access="public" output="false">
 		<cfargument name="property" type="string" required="true">
 		<cfreturn ListFindNoCase("cf_sql_integer,cf_sql_bigint,cf_sql_tinyint,cf_sql_smallint",variables.wheels.class.properties[arguments.property].type)>
 	</cffunction>
 
 
-	<cffunction name="$idIsValid" returntype="boolean" access="public" output="false" mixin="model">
+	<cffunction name="$idIsValid" returntype="boolean" access="public" output="false">
 		<cfargument name="id" type="string" required="true">
 		<cfif $propertyIsInteger($getIdColumn())>
 			<cfreturn IsNumeric(arguments.id)>
@@ -159,7 +159,7 @@
 	</cffunction>
 	
 	
-	<cffunction name="$formatIdForQuery" returntype="string" access="public" output="false" mixin="model">
+	<cffunction name="$formatIdForQuery" returntype="string" access="public" output="false">
 		<cfargument name="id" type="string" required="true">
 		<cfargument name="match" type="boolean" default="true">
 		<cfset arguments.id = Trim(arguments.id)>
@@ -189,13 +189,13 @@
 	-------------------------------------------------------------------------------------
 	------------------------------------------------------------------------------------>	
 	
-	<cffunction name="beforeMove" returntype="void" access="public" output="false" mixin="model">
+	<cffunction name="beforeMove" returntype="void" access="public" output="false">
 		<cfargument name="methods" type="string" required="false" default="" />
 		<cfset $registerCallback(type="beforeMove", argumentCollection=arguments) />
 	</cffunction>	
 	
 	
-	<cffunction name="afterMove" returntype="void" access="public" output="false" mixin="model">
+	<cffunction name="afterMove" returntype="void" access="public" output="false">
 		<cfargument name="methods" type="string" required="false" default="" />
 		<cfset $registerCallback(type="afterMove", argumentCollection=arguments) />
 	</cffunction>	
@@ -353,6 +353,11 @@
 		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getLeftColumn()# <= #this[$getLeftColumn()]# AND #$getRightColumn()# >= #this[$getRightColumn()]# AND #$getParentColumn()# IS NULL")>
 		<cfreturn findOne(argumentcollection=arguments) />
 	</cffunction>
+
+
+	<cffunction name="ancestor" returntype="any" access="public" output="false" hint="I return the parent of the current node.">
+		<cfreturn findOne(where="$getIdColumn=#this[$getParentColumn()]#")>
+	</cffunction>
 	
 	
 	<cffunction name="selfAndAncestors" returntype="any" access="public" output="false" hint="I return the current node and all of its parents down to the root.">
@@ -454,11 +459,6 @@
 	</cffunction>
 
 
-	<cffunction name="parent" returntype="any" access="public" output="false" hint="I return the parent of the current node.">
-		<cfreturn findOne(where="$getIdColumn=#this[$getParentColumn()]#")>
-	</cffunction>
-
-
 	<cffunction name="isSameScope" returntype="boolean" access="public" output="false" hint="I return true if the supplied target is of the same scope as the current node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfscript>
@@ -496,16 +496,16 @@
 	</cffunction>
 
 	
-	<cffunction name="moveLeft" returntype="boolean" access="public" output="false" mixin="model" hint="I exchange position with the nearest sibling to the left of the current node.">
+	<cffunction name="moveLeft" returntype="boolean" access="public" output="false" hint="I exchange position with the nearest sibling to the left of the current node.">
 		<cfreturn moveToLeftOf(leftSibling())>
 	</cffunction>
 
 	
-	<cffunction name="moveRight" returntype="boolean" access="public" output="false" mixin="model" hint="I exchange position with the nearest sibling to the right of the current node.">
+	<cffunction name="moveRight" returntype="boolean" access="public" output="false" hint="I exchange position with the nearest sibling to the right of the current node.">
 		<cfreturn moveToRightOf(rightSibling())>
 	</cffunction>
 
-	<cffunction name="moveToLeftOf" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node to the left of the target node.">
+	<cffunction name="moveToLeftOf" returntype="boolean" access="public" output="false" hint="I move the current node to the left of the target node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfset arguments.target = $getObject(arguments.target)>
 		<cfif IsObject(arguments.target)>
@@ -514,7 +514,7 @@
 		<cfreturn false>
 	</cffunction>
 	
-	<cffunction name="moveToRightOf" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node to the right of the target node.">
+	<cffunction name="moveToRightOf" returntype="boolean" access="public" output="false" hint="I move the current node to the right of the target node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfset arguments.target = $getObject(arguments.target)>
 		<cfif IsObject(arguments.target)>
@@ -523,7 +523,7 @@
 		<cfreturn false>
 	</cffunction>
 	
-	<cffunction name="moveToChildOf" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node underneath the target node.">
+	<cffunction name="moveToChildOf" returntype="boolean" access="public" output="false" hint="I move the current node underneath the target node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfset arguments.target = $getObject(arguments.target)>
 		<cfif IsObject(arguments.target)>
@@ -532,11 +532,11 @@
 		<cfreturn false>
 	</cffunction>
 	
-	<cffunction name="moveToRoot" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node to the first root position.">
+	<cffunction name="moveToRoot" returntype="boolean" access="public" output="false" hint="I move the current node to the first root position.">
 		<cfreturn $moveTo("", "root") />
 	</cffunction>
 	
-	<cffunction name="isMovePossible" returntype="boolean" access="public" output="false" mixin="model" hint="I check to see that the requested move is possible.">
+	<cffunction name="isMovePossible" returntype="boolean" access="public" output="false" hint="I check to see that the requested move is possible.">
 		<cfargument name="target" type="component" required="true" />
 		<cfscript>
 			if (this.key() == target.key() or not isSameScope(arguments.target))
@@ -548,7 +548,7 @@
 		</cfscript>
 	</cffunction>
 	
-	<cffunction name="toText" returntype="string" access="public" output="false" mixin="model">
+	<cffunction name="toText" returntype="string" access="public" output="false">
 		<cfthrow type="Wheels.Plugins.NestedSet.NotImplemented" message="This method has not been implemented yet." />
 	</cffunction>
 	
@@ -558,22 +558,30 @@
 	-------------------------------------------------------------------------------------
 	------------------------------------------------------------------------------------>
 	
-	<cffunction name="$moveToNewParent" returntype="boolean" access="public" output="false" mixin="model">
+	<cffunction name="$storeNewParent" returntype="boolean" access="public" output="false">
+		<cfset variables.wheels.class.nestedSet.moveToNewParentId = hasChanged($getParentColumn()) />
+		<cfreturn true />
+	</cffunction>
+	
+	<cffunction name="$moveToNewParent" returntype="boolean" access="public" output="false">
 		<cfscript>
 			var parent = $getObject(this[$getParentColumn()]);
-			if (IsObject(parent))
+			if (IsObject(parent)) {
 				if (not isSameScope(parent)) {			
 					$throw(type="Wheels.Plugins.NestedSet.ScopeMismatch",message="The supplied parent is not within the same scope as the item you are trying to insert.");
-				} else {
+				} else if (variables.wheels.class.nestedSet.moveToNewParentId) {
 					moveToChildOf(parent);
 				}
+			}
+			// delete the instance variable
+			StructDelete(variables.wheels.class.nestedSet,"moveToNewParentId");
 			// return true even if we did nothing as the node has already been inserted at root level
 			return true;
 		</cfscript>
 	</cffunction>
 	
 	
-	<cffunction name="$setDefaultLeftAndRight" returntype="void" access="public" output="false" mixin="model">
+	<cffunction name="$setDefaultLeftAndRight" returntype="void" access="public" output="false">
 		<cfscript>
 			var loc = {
 				  maxRight = this.maximum(property=$getRightColumn())
@@ -591,7 +599,7 @@
 		if you would like callbacks to run for each object deleted, simply
 		pass the argument instanciateOnDelete=true into hasNestedSet() 
 	--->
-	<cffunction name="$deleteDescendants" returntype="boolean" access="public" output="false" mixin="model">
+	<cffunction name="$deleteDescendants" returntype="boolean" access="public" output="false">
 		<cfscript>
 			var loc = {};	
 			
@@ -635,13 +643,16 @@
 		core private method used to move items around in the tree
 		update should not be scoped since the entire table is one big tree
 	--->
-	<cffunction name="$moveTo" returntype="any" access="public" output="false" mixin="model">
+	<cffunction name="$moveTo" returntype="any" access="public" output="false">
 		<cfargument name="target" type="any" required="true" />
 		<cfargument name="position" type="string" required="true" hint="may be one of 'child, left, right, root'" />
 		<cfscript>
-			var loc = {
-				  queryArgs = variables.wheels.class.connection
-			};
+			var loc = { queryArgs={} };
+			loc.queryArgs.datasource = variables.wheels.class.connection.datasource;
+			if (Len(variables.wheels.class.connection.username))
+				loc.queryArgs.username = variables.instance.connection.username;
+			if (Len(variables.wheels.class.connection.password))
+				loc.queryArgs.password = variables.instance.connection.password;
 		</cfscript>
 		
 		<cftransaction action="begin">
@@ -789,7 +800,7 @@
 	<!---
 		developers should be able to pass in an object or key and we get the object
 	--->
-	<cffunction name="$getObject" returntype="any" access="public" output="false" mixin="model">
+	<cffunction name="$getObject" returntype="any" access="public" output="false">
 		<cfargument name="identifier" type="any" required="true" hint="An id or an object." />
 		<cfscript>
 			if (IsObject(arguments.identifier))
