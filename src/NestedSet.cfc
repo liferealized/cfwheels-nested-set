@@ -12,7 +12,7 @@
 	Notes:		Ported from Awesome Nested Sets for Rails
 				http://github.com/collectiveidea/awesome_nested_set
 
-	Usage:		Use hasNestedSet() in your model init to setup for the methods below
+	Usage:		Use actsAsNestedSet() in your model init to setup for the methods below
 				defaults
 					- idColumn = '' (defaults to the primary key during validation)
 					- parentColumn = 'parentId'
@@ -30,7 +30,7 @@
 		<cfreturn this />
 	</cffunction>
 
-	<cffunction name="actsAsNestedSet" returntype="void" access="public" output="false">
+	<cffunction name="hasNestedSet" returntype="void" access="public" output="false" mixin="model">
 		<cfargument name="idColumn" type="string" default="">
 		<cfargument name="parentColumn" type="string" default="parentId">
 		<cfargument name="leftColumn" type="string" default="lft">
@@ -504,8 +504,8 @@
 	<cffunction name="moveRight" returntype="boolean" access="public" output="false" hint="I exchange position with the nearest sibling to the right of the current node.">
 		<cfreturn moveToRightOf(rightSibling())>
 	</cffunction>
-
-	<cffunction name="moveToLeftOf" returntype="boolean" access="public" output="false" hint="I move the current node to the left of the target node.">
+	
+	<cffunction name="moveToLeftOf" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node to the left of the target node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfset arguments.target = $getObject(arguments.target)>
 		<cfif IsObject(arguments.target)>
@@ -514,7 +514,7 @@
 		<cfreturn false>
 	</cffunction>
 	
-	<cffunction name="moveToRightOf" returntype="boolean" access="public" output="false" hint="I move the current node to the right of the target node.">
+	<cffunction name="moveToRightOf" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node to the right of the target node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfset arguments.target = $getObject(arguments.target)>
 		<cfif IsObject(arguments.target)>
@@ -523,7 +523,7 @@
 		<cfreturn false>
 	</cffunction>
 	
-	<cffunction name="moveToChildOf" returntype="boolean" access="public" output="false" hint="I move the current node underneath the target node.">
+	<cffunction name="moveToChildOf" returntype="boolean" access="public" output="false" mixin="model" hint="I move the current node underneath the target node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
 		<cfset arguments.target = $getObject(arguments.target)>
 		<cfif IsObject(arguments.target)>
@@ -583,14 +583,10 @@
 	
 	<cffunction name="$setDefaultLeftAndRight" returntype="void" access="public" output="false">
 		<cfscript>
-			var loc = {
-				  maxRight = this.maximum(property=$getRightColumn())
-				, leftColumn = loc.maxRight + 1
-				, rightColumn = loc.maxRight + 2
-			};
-			
-			this[$getLeftColumn()] = loc.leftColumn;
-			this[$getRightColumn()] = loc.rightColumn;
+			this[$getLeftColumn()] = this.maximum(property=$getRightColumn());
+			if (not IsNumeric(this[$getLeftColumn()]))
+				this[$getLeftColumn()] = 1;
+			this[$getRightColumn()] = this[$getLeftColumn()] + 1
 		</cfscript>
 	</cffunction>
 	
