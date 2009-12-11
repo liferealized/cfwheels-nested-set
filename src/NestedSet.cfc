@@ -44,7 +44,7 @@
 			variables.wheels.class.nestedSet.scope = Replace(variables.wheels.class.nestedSet.scope,", ",",","all");
 			variables.wheels.class.nestedSet.isValidated = false;
 			// set callbacks
-			beforeCreate(methods="$setDefaultLeftAndRight");
+			beforeValidationOnCreate(methods="$setDefaultLeftAndRight");
 			beforeSave(methods="$storeNewParent");
 			afterSave(methods="$moveToNewParent");
 			beforeDelete(methods="$deleteDescendants");
