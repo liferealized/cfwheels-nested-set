@@ -49,7 +49,7 @@
 			afterSave(methods="$moveToNewParent");
 			beforeDelete(methods="$deleteDescendants");
 			// add in a calculated property for the leaf value
-			property(name="leaf", sql="#arguments.rightColumn# - #arguments.leftColumn#");
+			property(name="isLeaf", sql="CASE WHEN (#arguments.rightColumn# - #arguments.leftColumn#) = 1 THEN 1 ELSE 0 END"); 
 			// allow for the two new types of callbacks
 			variables.wheels.class.callbacks.beforeMove = ArrayNew(1);
 			variables.wheels.class.callbacks.afterMove = ArrayNew(1);
