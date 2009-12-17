@@ -30,6 +30,7 @@
 		<cfreturn this />
 	</cffunction>
 
+
 	<cffunction name="nestedSet" returntype="void" access="public" output="false" mixin="model">
 		<cfargument name="idColumn" type="string" default="">
 		<cfargument name="parentColumn" type="string" default="parentId">
@@ -255,7 +256,7 @@
 	</cffunction>
 	
 	
-	<cffunction name="noDuplicatesForColumns">
+	<cffunction name="noDuplicatesForColumns" returntype="boolean" access="public" output="false">
 		<cfscript>
 			var loc = {
 				  select = $getScope()
@@ -290,7 +291,7 @@
 	</cffunction>
 	
 	
-	<cffunction name="allRootsValid">
+	<cffunction name="allRootsValid" returntype="boolean" access="public" output="false">
 		<cfreturn this.eachRootValid(this.allRoots(argumentCollection=arguments)) />
 	</cffunction>
 	
@@ -319,8 +320,49 @@
 	</cffunction>
 	
 	
-	<cffunction name="rebuild">
-		<cfthrow type="Wheels.Plugins.NestedSet.NotImplemented" message="This method has not been implemented yet." />
+	<cffunction name="rebuild" returntype="boolean" access="public" output="false">
+		<cfscript>
+			var loc = {};
+			
+			if (this.isTreeValid())
+				return true;
+				
+			// find all root nodes
+			loc.roots = this.allRoots(returnAs="objects");
+			loc.iEnd = ArrayLen(loc.roots);
+			loc.lft = 1;
+		</cfscript>
+		<cftransaction action="begin">
+			<cfscript>
+				
+				for (loc.i = 1; loc.i lte loc.iEnd; loc.i++) {
+					loc.lft = $rebuildTree(loc.roots[loc.i], loc.lft);
+				}
+			</cfscript>
+			<cftransaction action="commit" />
+		</cftransaction>
+		<cfreturn true />
+	</cffunction>
+
+
+	<cffunction name="$rebuildTree" returntype="numeric" access="public" output="false">
+		<cfargument name="node" type="any" required="true" />
+		<cfargument name="lft" type="numeric" required="true" />
+		<cfscript>
+			var loc = {};
+			arguments.rgt = arguments.lft + 1;
+			
+			loc.children = arguments.node.children(returnAs="objects");
+			loc.iEnd = ArrayLen(loc.children);
+			
+			for (loc.i = 1; loc.i lte loc.iEnd; loc.i++)
+				arguments.rgt = $rebuildTree(loc.children[loc.i], arguments.rgt);
+			
+			arguments.node[$getLeftColumn()] = arguments.lft;
+			arguments.node[$getRightColumn()] = arguments.rgt;
+			arguments.node.$update(parameterize=true); // pass all callbacks and validations
+		</cfscript>
+		<cfreturn arguments.rgt + 1 />
 	</cffunction>
 	
 	
@@ -539,10 +581,10 @@
 	<cffunction name="isMovePossible" returntype="boolean" access="public" output="false" hint="I check to see that the requested move is possible.">
 		<cfargument name="target" type="component" required="true" />
 		<cfscript>
-			if (this.key() == target.key() or not isSameScope(arguments.target))
+			if (this[$getIdColumn()] == arguments.target[$getIdColumn()] or not isSameScope(arguments.target))
 				return false;
-			if (((this[$getLeftColumn()] lte target[$getLeftColumn()] and this[$getRightColumn()] gte arguments.target[$getLeftColumn()]) 
-				or (this[$getLeftColumn()] lte target[$getRightColumn()] and this[$getRightColumn()] gte arguments.target[$getRightColumn()])))
+			if (((this[$getLeftColumn()] lte arguments.target[$getLeftColumn()] and this[$getRightColumn()] gte arguments.target[$getLeftColumn()]) 
+				or (this[$getLeftColumn()] lte arguments.target[$getRightColumn()] and this[$getRightColumn()] gte arguments.target[$getRightColumn()])))
 				return false;
 			return true;
 		</cfscript>
@@ -583,7 +625,7 @@
 	
 	<cffunction name="$setDefaultLeftAndRight" returntype="void" access="public" output="false">
 		<cfscript>
-			this[$getLeftColumn()] = this.maximum(property=$getRightColumn());
+			this[$getLeftColumn()] = this.maximum(property=$getRightColumn(),reload=true);
 			if (IsNumeric(this[$getLeftColumn()]))
 				this[$getLeftColumn()] = this[$getLeftColumn()] + 1;
 			else
@@ -614,24 +656,11 @@
 			loc.diff = this[$getRightColumn()] - this[$getLeftColumn()] + 1;
 		</cfscript>
 		
-		<cfquery name="loc.query" attributeCollection="#variables.wheels.class.connection#">
+		<cfquery name="loc.query" datasource="#variables.wheels.class.connection.datasource#">
 			UPDATE 	#tableName()#
-			SET 	#$getLeftColumn()# = #$getLeftColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
+			SET 	  #$getLeftColumn()# = #$getLeftColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
+					, #$getRightColumn()# = #$getRightColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
 			WHERE	#$getLeftColumn()# > <cfqueryparam cfsqltype="cf_sql_integer" value="#this[$getRightColumn()]#">
-			<cfif ListLen($getScope()) gt 0>
-				<cfloop list="#$getScope()#" index="loc.property">
-				AND		#loc.property# = <cfqueryparam cfsqltype="#variables.wheels.class.properties[loc.property].type#" value="#this[loc.property]#">
-				</cfloop>
-			</cfif>
-			;
-			UPDATE 	#tableName()# 
-			SET 	#$getRightColumn()# = #$getRightColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
-			WHERE	#$getRightColumn()# > <cfqueryparam cfsqltype="cf_sql_integer" value="#this[$getRightColumn()]#">
-			<cfif ListLen($getScope()) gt 0>
-				<cfloop list="#$getScope()#" index="loc.property">
-				AND		#loc.property# = <cfqueryparam cfsqltype="#variables.wheels.class.properties[loc.property].type#" value="#this[loc.property]#">
-				</cfloop>
-			</cfif>
 		</cfquery>
 		
 		<cfreturn true />
@@ -645,7 +674,14 @@
 		<cfargument name="target" type="any" required="true" />
 		<cfargument name="position" type="string" required="true" hint="may be one of 'child, left, right, root'" />
 
-		<cfset var loc = {}>
+		<cfscript>
+			var loc = { queryArgs={} };
+			loc.queryArgs.datasource = variables.wheels.class.connection.datasource;
+			if (Len(variables.wheels.class.connection.username))
+				loc.queryArgs.username = variables.instance.connection.username;
+			if (Len(variables.wheels.class.connection.password))
+				loc.queryArgs.password = variables.instance.connection.password;
+		</cfscript>
 		
 		<cftransaction action="begin">
 			<cfscript>
@@ -656,7 +692,8 @@
 				if (!$callback("beforeMove"))
 					return false;
 				
-				// reload this object so we have the freshest data
+				// reload objects so we have the freshest data
+				arguments.target.reload();
 				this.reload();
 				
 				// make sure we can do the move
@@ -693,13 +730,13 @@
 				loc.d = loc.sortArray[4];
 				
 				switch (arguments.position) {
-					case "child": { loc.newParent = arguments.target.key(); break; }
+					case "child": { loc.newParent = target[$getIdColumn()]; break; }
 					case "root": { loc.newParent = "NULL"; break; }
 					default: { loc.newParent = target[$getParentColumn()]; break; }
 				}
 			</cfscript>
 			
-			<cfquery name="loc.update" attributeCollection="#variables.wheels.class.connection#">
+			<cfquery name="loc.update" attributeCollection="#loc.queryArgs#">
 				UPDATE 	#tableName()#
 				SET 	#$getLeftColumn()# =	
 							CASE 
@@ -798,7 +835,7 @@
 			if (IsObject(arguments.identifier))
 				return arguments.identifier;
 			else if ($idIsValid(arguments.identifier))
-				return findByKey(arguments.identifier);
+				return findOne(where="#$getIdColumn()# = #$formatIdForQuery(arguments.identifier)#");
 			else
 				return false;
 		</cfscript>
