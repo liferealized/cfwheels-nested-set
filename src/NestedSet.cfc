@@ -229,7 +229,6 @@
 		<cfreturn (leftAndRightIsValid() and noDuplicatesForColumns() and allRootsValid())>
 	</cffunction>
 	
-	
 	<cffunction name="leftAndRightIsValid" returntype="boolean" access="public" output="false">
 		<cfset var loc = {}>
 		
@@ -254,8 +253,7 @@
 		<cfreturn (loc.query.leftRightCount eq 0) />
 	</cffunction>
 	
-	
-	<cffunction name="noDuplicatesForColumns">
+	<cffunction name="noDuplicatesForColumns" returntype="boolean" access="public" output="false">
 		<cfscript>
 			var loc = {
 				  select = $getScope()
@@ -290,7 +288,7 @@
 	</cffunction>
 	
 	
-	<cffunction name="allRootsValid">
+	<cffunction name="allRootsValid" returntype="boolean" access="public" output="false">
 		<cfreturn this.eachRootValid(this.allRoots(argumentCollection=arguments)) />
 	</cffunction>
 	
@@ -319,8 +317,48 @@
 	</cffunction>
 	
 	
-	<cffunction name="rebuild">
-		<cfthrow type="Wheels.Plugins.NestedSet.NotImplemented" message="This method has not been implemented yet." />
+	<cffunction name="rebuild" returntype="boolean" access="public" output="false">
+		<cfscript>
+			var loc = {};
+			
+			if (this.isTreeValid())
+				return true;
+				
+			// find all root nodes
+			loc.roots = this.allRoots(returnAs="objects");
+			loc.iEnd = ArrayLen(loc.roots);
+			loc.lft = 1;
+		</cfscript>
+		<cftransaction action="begin">
+			<cfscript>
+				
+				for (loc.i = 1; loc.i lte loc.iEnd; loc.i++) {
+					loc.lft = $rebuildTree(loc.roots[loc.i], loc.lft);
+				}
+			</cfscript>
+			<cftransaction action="commit" />
+		</cftransaction>
+		<cfreturn true />
+	</cffunction>
+	
+	<cffunction name="$rebuildTree" returntype="numeric" access="public" output="false">
+		<cfargument name="node" type="any" required="true" />
+		<cfargument name="lft" type="numeric" required="true" />
+		<cfscript>
+			var loc = {};
+			arguments.rgt = arguments.lft + 1;
+			
+			loc.children = arguments.node.children(returnAs="objects");
+			loc.iEnd = ArrayLen(loc.children);
+			
+			for (loc.i = 1; loc.i lte loc.iEnd; loc.i++)
+				arguments.rgt = $rebuildTree(loc.children[loc.i], arguments.rgt);
+			
+			arguments.node[$getLeftColumn()] = arguments.lft;
+			arguments.node[$getRightColumn()] = arguments.rgt;
+			arguments.node.$update(parameterize=true); // pass all callbacks and validations
+		</cfscript>
+		<cfreturn arguments.rgt + 1 />
 	</cffunction>
 	
 	
@@ -443,10 +481,12 @@
 	</cffunction>
 
 
+
+
 	<cffunction name="selfAndChildren" returntype="any" access="public" output="false" hint="I return the current node and its immediate children.">
 		<cfargument name="where" type="string" required="false" default="">
 		<cfargument name="order" type="string" required="false" default="#$getLeftColumn()# ASC">
-		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getLeftColumn()# >= #this[$getLeftColumn()]# AND #$getRightColumn()# <= #this[$getRightColumn()]# AND (#$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])# OR #$getIdColumn()# #$formatIdForQuery(this[$getIdColumn()])#)")>
+		<cfset arguments.where = $createScopedWhere(arguments.where,"(#$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])# OR #$getIdColumn()# #$formatIdForQuery(this[$getIdColumn()])#)")>
 		<cfreturn findAll(argumentCollection=arguments) />
 	</cffunction>
 
@@ -454,10 +494,9 @@
 	<cffunction name="children" returntype="any" access="public" output="false" hint="I return the current node's immediate children.">
 		<cfargument name="where" type="string" required="false" default="">
 		<cfargument name="order" type="string" required="false" default="#$getLeftColumn()# ASC">
-		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getLeftColumn()# > #this[$getLeftColumn()]# AND #$getRightColumn()# < #this[$getRightColumn()]# AND #$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])#")>
+		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])#")>
 		<cfreturn findAll(argumentCollection=arguments) />
 	</cffunction>
-
 
 	<cffunction name="isSameScope" returntype="boolean" access="public" output="false" hint="I return true if the supplied target is of the same scope as the current node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
@@ -583,7 +622,7 @@
 	
 	<cffunction name="$setDefaultLeftAndRight" returntype="void" access="public" output="false">
 		<cfscript>
-			this[$getLeftColumn()] = this.maximum(property=$getRightColumn());
+			this[$getLeftColumn()] = this.maximum(property=$getRightColumn()) + 1;
 			if (not IsNumeric(this[$getLeftColumn()]))
 				this[$getLeftColumn()] = 1;
 			this[$getRightColumn()] = this[$getLeftColumn()] + 1;
@@ -614,22 +653,9 @@
 		
 		<cfquery datasource="#variables.wheels.class.connection.datasource#" name="loc.query">
 			UPDATE 	#tableName()#
-			SET 	#$getLeftColumn()# = #$getLeftColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
+			SET 	  #$getLeftColumn()# = #$getLeftColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
+					, #$getRightColumn()# = #$getRightColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
 			WHERE	#$getLeftColumn()# > <cfqueryparam cfsqltype="cf_sql_integer" value="#this[$getRightColumn()]#">
-			<cfif ListLen($getScope()) gt 0>
-				<cfloop list="#$getScope()#" index="loc.property">
-				AND		#loc.property# = <cfqueryparam cfsqltype="#variables.wheels.class.properties[loc.property].type#" value="#this[loc.property]#">
-				</cfloop>
-			</cfif>
-			;
-			UPDATE 	#tableName()# 
-			SET 	#$getRightColumn()# = #$getRightColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
-			WHERE	#$getRightColumn()# > <cfqueryparam cfsqltype="cf_sql_integer" value="#this[$getRightColumn()]#">
-			<cfif ListLen($getScope()) gt 0>
-				<cfloop list="#$getScope()#" index="loc.property">
-				AND		#loc.property# = <cfqueryparam cfsqltype="#variables.wheels.class.properties[loc.property].type#" value="#this[loc.property]#">
-				</cfloop>
-			</cfif>
 		</cfquery>
 		
 		<cfreturn true />
