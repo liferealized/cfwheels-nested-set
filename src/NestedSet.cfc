@@ -229,7 +229,6 @@
 		<cfreturn (leftAndRightIsValid() and noDuplicatesForColumns() and allRootsValid())>
 	</cffunction>
 	
-	
 	<cffunction name="leftAndRightIsValid" returntype="boolean" access="public" output="false">
 		<cfset var loc = {}>
 		
@@ -253,8 +252,7 @@
 		
 		<cfreturn (loc.query.leftRightCount eq 0) />
 	</cffunction>
-	
-	
+
 	<cffunction name="noDuplicatesForColumns" returntype="boolean" access="public" output="false">
 		<cfscript>
 			var loc = {
@@ -342,7 +340,6 @@
 		</cftransaction>
 		<cfreturn true />
 	</cffunction>
-
 
 	<cffunction name="$rebuildTree" returntype="numeric" access="public" output="false">
 		<cfargument name="node" type="any" required="true" />
@@ -484,10 +481,12 @@
 	</cffunction>
 
 
+
+
 	<cffunction name="selfAndChildren" returntype="any" access="public" output="false" hint="I return the current node and its immediate children.">
 		<cfargument name="where" type="string" required="false" default="">
 		<cfargument name="order" type="string" required="false" default="#$getLeftColumn()# ASC">
-		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getLeftColumn()# >= #this[$getLeftColumn()]# AND #$getRightColumn()# <= #this[$getRightColumn()]# AND (#$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])# OR #$getIdColumn()# #$formatIdForQuery(this[$getIdColumn()])#)")>
+		<cfset arguments.where = $createScopedWhere(arguments.where,"(#$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])# OR #$getIdColumn()# #$formatIdForQuery(this[$getIdColumn()])#)")>
 		<cfreturn findAll(argumentCollection=arguments) />
 	</cffunction>
 
@@ -495,10 +494,9 @@
 	<cffunction name="children" returntype="any" access="public" output="false" hint="I return the current node's immediate children.">
 		<cfargument name="where" type="string" required="false" default="">
 		<cfargument name="order" type="string" required="false" default="#$getLeftColumn()# ASC">
-		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getLeftColumn()# > #this[$getLeftColumn()]# AND #$getRightColumn()# < #this[$getRightColumn()]# AND #$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])#")>
+		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getParentColumn()# #$formatIdForQuery(this[$getIdColumn()])#")>
 		<cfreturn findAll(argumentCollection=arguments) />
 	</cffunction>
-
 
 	<cffunction name="isSameScope" returntype="boolean" access="public" output="false" hint="I return true if the supplied target is of the same scope as the current node.">
 		<cfargument name="target" type="any" required="true" hint="I am either the id of a node or the node itself.">
