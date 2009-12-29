@@ -634,11 +634,11 @@
 	<!---
 		removes all descendants of itself before being deleted
 		if you would like callbacks to run for each object deleted, simply
-		pass the argument instanciateOnDelete=true into hasNestedSet() 
+		pass the argument instanciateOnDelete=true into nestedSet() 
 	--->
 	<cffunction name="$deleteDescendants" returntype="boolean" access="public" output="false">
 		<cfscript>
-			var loc = {};	
+			var loc = {};
 			
 			// make sure this method can only run on the original object
 			if (StructKeyExists(request, "deleteDescendantsCalled"))
@@ -655,9 +655,14 @@
 		
 		<cfquery name="loc.query" datasource="#variables.wheels.class.connection.datasource#">
 			UPDATE 	#tableName()#
-			SET 	  #$getLeftColumn()# = #$getLeftColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
-					, #$getRightColumn()# = #$getRightColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
+			SET 	#$getLeftColumn()# = #$getLeftColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
 			WHERE	#$getLeftColumn()# > <cfqueryparam cfsqltype="cf_sql_integer" value="#this[$getRightColumn()]#">
+		</cfquery>
+		
+		<cfquery name="loc.query" datasource="#variables.wheels.class.connection.datasource#">
+			UPDATE 	#tableName()#
+			SET 	#$getRightColumn()# = #$getRightColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
+			WHERE	#$getRightColumn()# > <cfqueryparam cfsqltype="cf_sql_integer" value="#this[$getRightColumn()]#">
 		</cfquery>
 		
 		<cfreturn true />
