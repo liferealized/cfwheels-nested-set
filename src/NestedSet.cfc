@@ -115,7 +115,7 @@
 
 			// check hasNestedSet() has been run
 			if (not StructKeyExists(variables.wheels.class,"nestedSet"))	
-				$throw(type="Wheels.Plugins.NestedSet.SetupNotComplete",message="You must call hasNestedSet() from your model's init() before you can use NestedSet methods.");
+				$throw(type="Wheels.Plugins.NestedSet.SetupNotComplete",message="You must call nestedSet() from your model's init() before you can use NestedSet methods.");
 			
 			// skip validation if it has already run
 			if (not variables.wheels.class.nestedSet.isValidated)
@@ -335,10 +335,8 @@
 		</cfscript>
 		<cftransaction action="begin">
 			<cfscript>
-				
-				for (loc.i = 1; loc.i lte loc.iEnd; loc.i++) {
+				for (loc.i = 1; loc.i lte loc.iEnd; loc.i++)
 					loc.lft = $rebuildTree(loc.roots[loc.i], loc.lft);
-				}
 			</cfscript>
 			<cftransaction action="commit" />
 		</cftransaction>
@@ -397,8 +395,11 @@
 	</cffunction>
 
 
-	<cffunction name="ancestor" returntype="any" access="public" output="false" hint="I return the parent of the current node.">
-		<cfreturn findOne(where="$getIdColumn=#this[$getParentColumn()]#")>
+	<cffunction name="parent" returntype="any" access="public" output="false" hint="I return the parent of the current node.">
+		<cfargument name="where" type="string" required="false" default="">
+		<cfargument name="order" type="string" required="false" default="#$getLeftColumn()# ASC">
+		<cfset arguments.where = $createScopedWhere(arguments.where,"$getIdColumn=#this[$getParentColumn()]#")>
+		<cfreturn findOne(argumentCollection=arguments)>
 	</cffunction>
 	
 	
@@ -429,9 +430,9 @@
 	<cffunction name="siblings" returntype="any" access="public" output="false" hint="I return the current node's siblings.">
 		<cfargument name="where" type="string" required="false" default="">
 		<cfargument name="order" type="string" required="false" default="#$getLeftColumn()# ASC">
-		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getParentColumn()# #$formatIdForQuery(this[$getParentColumn()])# AND #$getIdColumn()# != 'e7ebe656-0f26-a649-beda-67036318c768'")>
+		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getParentColumn()# #$formatIdForQuery(this[$getParentColumn()])# AND #$getIdColumn()# != #$formatIdForQuery(this[$getIdColumn()])#")>
 		<cfreturn findAll(argumentCollection=arguments) />
-	</cffunction>
+	</cffunction>	
 	
 	
 	<cffunction name="leaves" returntype="any" access="public" output="false" hint="I return all children of the current node that do not have children themselves.">
