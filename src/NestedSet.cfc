@@ -26,7 +26,7 @@
 	------------------------------------------------------------------------------------>	
 	
 	<cffunction name="init" access="public" output="false" returntype="any">
-		<cfset this.version = "1.0,1.1" />
+		<cfset this.version = "1.1" />
 		<cfreturn this />
 	</cffunction>
 
@@ -41,7 +41,7 @@
 		<cfscript>
 			// add the nested set configuration into the model
 			variables.wheels.class.nestedSet = Duplicate(arguments);
-			variables.wheels.class.nestedSet.scope = Replace(variables.wheels.class.nestedSet.scope,", ",",","all");
+			variables.wheels.class.nestedSet.scope = $listClean(variables.wheels.class.nestedSet.scope);
 			variables.wheels.class.nestedSet.isValidated = false;
 			// set callbacks
 			beforeValidationOnCreate(methods="$setDefaultLeftAndRight");
@@ -118,7 +118,8 @@
 				$throw(type="Wheels.Plugins.NestedSet.SetupNotComplete",message="You must call hasNestedSet() from your model's init() before you can use NestedSet methods.");
 			
 			// skip validation if it has already run
-			if (not variables.wheels.class.nestedSet.isValidated) {
+			if (not variables.wheels.class.nestedSet.isValidated)
+			{
 				// check for custom id column, otherwise use the primary key from the model
 				if (not Len(variables.wheels.class.nestedSet.idColumn))
 					variables.wheels.class.nestedSet.idColumn = primaryKey();
@@ -126,8 +127,8 @@
 				if (CompareNoCase(variables.wheels.class.properties[variables.wheels.class.nestedset.idColumn].type,variables.wheels.class.properties[variables.wheels.class.nestedset.parentColumn].type) neq 0)	
 					$throw(type="Wheels.Plugins.NestedSet.KeyTypeMismatch",message="The cf_sql_type of the idColumn and parentColumn must be identical.");
 				// check scope fields are present in the object
-				for (loc.i=1; loc.i lte ListLen(variables.wheels.class.nestedSet.scope); loc.i++) {
-					// if (not StructKeyExists(this,ListGetAt(variables.wheels.class.nestedSet.scope,loc.i)))
+				for (loc.i=1; loc.i lte ListLen(variables.wheels.class.nestedSet.scope); loc.i++)
+				{
 					if (not StructKeyExists(variables.wheels.class.properties,ListGetAt(variables.wheels.class.nestedSet.scope,loc.i)))
 						$throw(type="Wheels.Plugins.NestedSet.ScopePropertyMissing",message="The property '#ListGetAt(variables.wheels.class.nestedSet.scope,loc.i)#' required in the scope argument is not present in the model.");
 				}
@@ -279,10 +280,13 @@
 		
 		<cfscript>
 			for (loc.item in loc.queries)
-				if (loc.queries[loc.item].RecordCount gt 0) {
+			{
+				if (loc.queries[loc.item].RecordCount gt 0)
+				{
 					loc.returnValue = false;
 					break;
 				}
+			}
 		</cfscript>
 		<cfreturn loc.returnValue />
 	</cffunction>
@@ -356,7 +360,7 @@
 			
 			arguments.node[$getLeftColumn()] = arguments.lft;
 			arguments.node[$getRightColumn()] = arguments.rgt;
-			arguments.node.$update(parameterize=true); // pass all callbacks and validations
+			arguments.node.$update(parameterize=true, reload=false); // pass all callbacks and validations
 		</cfscript>
 		<cfreturn arguments.rgt + 1 />
 	</cffunction>
@@ -598,25 +602,28 @@
 	------------------------------------------------------------------------------------>
 	
 	<cffunction name="$storeNewParent" returntype="boolean" access="public" output="false">
-		<cfset variables.wheels.class.nestedSet.moveToNewParentId = hasChanged($getParentColumn()) />
+		<cfset variables.moveToNewParentId = hasChanged($getParentColumn()) />
 		<cfreturn true />
 	</cffunction>
 	
 	<cffunction name="$moveToNewParent" returntype="boolean" access="public" output="false">
 		<cfscript>
-			var parent = $getObject(this[$getParentColumn()]);
-			if (IsObject(parent)) {
-				if (not isSameScope(parent)) {			
+			var parent = false;
+			
+			if (StructKeyExists(this, $getParentColumn()))
+				parent = $getObject(this[$getParentColumn()]);
+			
+			if (IsObject(parent))
+			{
+				if (!isSameScope(parent))		
 					$throw(type="Wheels.Plugins.NestedSet.ScopeMismatch",message="The supplied parent is not within the same scope as the item you are trying to insert.");
-				} else if (variables.wheels.class.nestedSet.moveToNewParentId) {
+				else if (StructKeyExists(variables, "moveToNewParentId") && IsBoolean(variables.moveToNewParentId) && variables.moveToNewParentId)
 					moveToChildOf(parent);
-				}
 			}
 			// delete the instance variable
-			StructDelete(variables.wheels.class.nestedSet,"moveToNewParentId");
-			// return true even if we did nothing as the node has already been inserted at root level
-			return true;
+			StructDelete(variables, "moveToNewParentId", false);
 		</cfscript>
+		<cfreturn true />
 	</cffunction>
 	
 	
@@ -675,7 +682,6 @@
 	<cffunction name="$moveTo" returntype="any" access="public" output="false">
 		<cfargument name="target" type="any" required="true" />
 		<cfargument name="position" type="string" required="true" hint="may be one of 'child, left, right, root'" />
-
 		<cfscript>
 			var loc = { queryArgs={} };
 			loc.queryArgs.datasource = variables.wheels.class.connection.datasource;
@@ -683,103 +689,97 @@
 				loc.queryArgs.username = variables.instance.connection.username;
 			if (Len(variables.wheels.class.connection.password))
 				loc.queryArgs.password = variables.instance.connection.password;
+
+			if (isNew())
+				$updatePersistedProperties();
+				
+			if (!$callback("beforeMove", true))
+				return false;
+			
+			// reload objects so we have the freshest data
+			arguments.target.reload();
+			this.reload();
+			
+			// make sure we can do the move
+			if (arguments.position != "root" and !isMovePossible(arguments.target))
+				$throw(type="Wheels.Plugins.NestedSet.MoveNotAllowed", message="Impossible move, target node cannot be inside moved tree.");
+			
+			switch (arguments.position)
+			 {
+				case "child": { loc.bound = arguments.target[$getRightColumn()];     break; }
+				case "left":  { loc.bound = arguments.target[$getLeftColumn()];      break; }
+				case "right": { loc.bound = arguments.target[$getRightColumn()] + 1; break; }
+				case "root":  { loc.bound = 1; break; }
+				default: {
+					$throw(type="Wheels.Plugins.NestedSet.IncorrectArgumentValue", message="Position should be 'child', 'left', 'right' or 'root' ('#arguments.position#' received).");
+				}
+			}
+			
+			if (loc.bound gt this[$getRightColumn()])
+			{
+				loc.bound--;
+				loc.otherBound = this[$getRightColumn()] + 1;
+			}
+			else 
+			{
+				loc.otherBound = this[$getLeftColumn()] - 1;
+			}
+			
+			if (loc.bound == this[$getRightColumn()] or loc.bound == this[$getLeftColumn()])
+				return true;
+				
+			loc.sortArray = [this[$getLeftColumn()], this[$getRightColumn()], loc.bound, loc.otherBound];
+			ArraySort(loc.sortArray, "numeric");
+				
+			loc.a = loc.sortArray[1];
+			loc.b = loc.sortArray[2];
+			loc.c = loc.sortArray[3];
+			loc.d = loc.sortArray[4];
+			
+			switch (arguments.position)
+			{
+				case "child": { loc.newParent = target[$getIdColumn()]; break; }
+				case "root":  { loc.newParent = "NULL"; break; }
+				default:      { loc.newParent = target[$getParentColumn()]; break; }
+			}
 		</cfscript>
 		
-		<cftransaction action="begin">
-			<cfscript>
-				
-				if (isNew())
-					$throw(type="Wheels.Plugins.NestedSet.MoveNotAllowed", message="You cannot move a new node!");
-					
-				if (!$callback("beforeMove"))
-					return false;
-				
-				// reload objects so we have the freshest data
-				arguments.target.reload();
-				this.reload();
-				
-				// make sure we can do the move
-				if (arguments.position != "root" and !isMovePossible(arguments.target))
-					$throw(type="Wheels.Plugins.NestedSet.MoveNotAllowed", message="Impossible move, target node cannot be inside moved tree.");
-				
-				switch (arguments.position) {
-				
-					case "child": { loc.bound = arguments.target[$getRightColumn()];     break; }
-					case "left":  { loc.bound = arguments.target[$getLeftColumn()];      break; }
-					case "right": { loc.bound = arguments.target[$getRightColumn()] + 1; break; }
-					case "root":  { loc.bound = 1; break; }
-					default: {
-						$throw(type="Wheels.Plugins.NestedSet.IncorrectArgumentValue", message="Position should be 'child', 'left', 'right' or 'root' ('#arguments.position#' received).");
-					}
-				}
-				
-				if (loc.bound gt this[$getRightColumn()]) {
-					loc.bound--;
-					loc.otherBound = this[$getRightColumn()] + 1;
-				} else {
-					loc.otherBound = this[$getLeftColumn()] - 1;
-				}
-				
-				if (loc.bound == this[$getRightColumn()] or loc.bound == this[$getLeftColumn()])
-					return true;
-					
-				loc.sortArray = [this[$getLeftColumn()], this[$getRightColumn()], loc.bound, loc.otherBound];
-				ArraySort(loc.sortArray, "numeric");
-					
-				loc.a = loc.sortArray[1];
-				loc.b = loc.sortArray[2];
-				loc.c = loc.sortArray[3];
-				loc.d = loc.sortArray[4];
-				
-				switch (arguments.position) {
-					case "child": { loc.newParent = target[$getIdColumn()]; break; }
-					case "root": { loc.newParent = "NULL"; break; }
-					default: { loc.newParent = target[$getParentColumn()]; break; }
-				}
-			</cfscript>
-			
-			<cfquery name="loc.update" attributeCollection="#loc.queryArgs#">
-				UPDATE 	#tableName()#
-				SET 	#$getLeftColumn()# =	
-							CASE 
-								WHEN #$getLeftColumn()# BETWEEN <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.a#"> AND <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.b#">
-									THEN #$getLeftColumn()# + <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.d#"> - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.b#">
-								WHEN #$getLeftColumn()# BETWEEN <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.c#"> AND <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.d#">
-									THEN #$getLeftColumn()# + <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.a#"> - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.c#">
-								ELSE #$getLeftColumn()#
-							END,
-						#$getRightColumn()# = 	
-							CASE 
-								WHEN #$getRightColumn()# BETWEEN <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.a#"> AND <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.b#">
-									THEN #$getRightColumn()# + <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.d#"> - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.b#">
-								WHEN #$getRightColumn()# BETWEEN <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.c#"> AND <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.d#">
-									THEN #$getRightColumn()# + <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.a#"> - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.c#">
-								ELSE #$getRightColumn()#
-							END,
-						#$getParentColumn()# =
-							CASE
-								WHEN #$getIdColumn()# = <cfqueryparam cfsqltype="#$getIdType()#" value="#this[$getIdColumn()]#">
-									THEN	<cfif arguments.position eq "root" or ($idsAreNullable() and not Len(loc.newParent))>
-												NULL
-											<cfelse>
-												<cfqueryparam cfsqltype="#$getIdType()#" value="#loc.newParent#">
-											</cfif>
-								ELSE #$getParentColumn()#
-							END
-			</cfquery>
+		<cfquery name="loc.update" attributeCollection="#loc.queryArgs#">
+			UPDATE 	#tableName()#
+			SET 	#$getLeftColumn()# =	
+						CASE 
+							WHEN #$getLeftColumn()# BETWEEN <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.a#"> AND <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.b#">
+								THEN #$getLeftColumn()# + <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.d#"> - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.b#">
+							WHEN #$getLeftColumn()# BETWEEN <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.c#"> AND <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.d#">
+								THEN #$getLeftColumn()# + <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.a#"> - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.c#">
+							ELSE #$getLeftColumn()#
+						END,
+					#$getRightColumn()# = 	
+						CASE 
+							WHEN #$getRightColumn()# BETWEEN <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.a#"> AND <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.b#">
+								THEN #$getRightColumn()# + <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.d#"> - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.b#">
+							WHEN #$getRightColumn()# BETWEEN <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.c#"> AND <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.d#">
+								THEN #$getRightColumn()# + <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.a#"> - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.c#">
+							ELSE #$getRightColumn()#
+						END,
+					#$getParentColumn()# =
+						CASE
+							WHEN #$getIdColumn()# = <cfqueryparam cfsqltype="#$getIdType()#" value="#this[$getIdColumn()]#">
+								THEN	<cfif arguments.position eq "root" or ($idsAreNullable() and not Len(loc.newParent))>
+											NULL
+										<cfelse>
+											<cfqueryparam cfsqltype="#$getIdType()#" value="#loc.newParent#">
+										</cfif>
+							ELSE #$getParentColumn()#
+						END
+		</cfquery>
 
-			<cfscript>
-				if (IsObject(arguments.target))
-					arguments.target.reload();
-				this.reload();
-			</cfscript>
-			
-			<cfif !$callback("afterMove")>
-				<cftransaction action="rollback" />
-			</cfif>
-		</cftransaction>
-		
-		<cfreturn $callback("afterMove") />
+		<cfscript>
+			if (IsObject(arguments.target))
+				arguments.target.reload();
+			this.reload();
+		</cfscript>
+		<cfreturn $callback("afterMove", true) />
 	</cffunction>
 	
 	
