@@ -45,7 +45,7 @@
 			variables.wheels.class.nestedSet.isValidated = false;
 			// set callbacks
 			beforeValidationOnCreate(methods="$setDefaultLeftAndRight");
-			beforeSave(methods="$storeNewParent");
+			beforeSave(methods="$checkForNewParent");
 			afterSave(methods="$moveToNewParent");
 			beforeDelete(methods="$deleteDescendants");
 			// add in a calculated property for the leaf value
@@ -231,9 +231,12 @@
 	</cffunction>
 	
 	<cffunction name="leftAndRightIsValid" returntype="boolean" access="public" output="false">
-		<cfset var loc = {}>
+		<cfscript>
+			var loc = {};
+			loc.queryArgs = $getQueryArguments();
+		</cfscript>
 		
-		<cfquery name="loc.query" attributeCollection="#variables.wheels.class.connection#">
+		<cfquery name="loc.query" attributeCollection="#loc.queryArgs#">
 			SELECT 		COUNT(*) AS leftRightCount
 			FROM 		#tableName()# AS nodes
 			LEFT JOIN 	#tableName()# AS parent ON nodes.#$getParentColumn()# = parent.#$getIdColumn()#
@@ -259,7 +262,7 @@
 			var loc = {
 				  select = $getScope()
 				, columns = ListAppend($getLeftColumn(), $getRightColumn())
-				, queryArgs = StructCopy(variables.wheels.class.connection)
+				, queryArgs = $getQueryArguments()
 				, queries = {}
 				, returnValue = true
 			};
@@ -270,7 +273,7 @@
 		<cfloop index="loc.i" from="1" to="#loc.iEnd#">
 			<cfset loc.column = ListGetAt(loc.columns, loc.i) />
 			<cfset loc.queryArgs.name = "loc.queries.#loc.column#" />
-			<cfquery attributeCollection="#loc.queryArgs#">
+			<cfquery name="loc.query" attributeCollection="#loc.queryArgs#">
 				SELECT #ListAppend(loc.select, loc.column)#, COUNT(#loc.column#)
 				FROM #tableName()#
 				GROUP BY #ListAppend(loc.select, loc.column)#
@@ -398,7 +401,7 @@
 	<cffunction name="parent" returntype="any" access="public" output="false" hint="I return the parent of the current node.">
 		<cfargument name="where" type="string" required="false" default="">
 		<cfargument name="order" type="string" required="false" default="#$getLeftColumn()# ASC">
-		<cfset arguments.where = $createScopedWhere(arguments.where,"$getIdColumn=#this[$getParentColumn()]#")>
+		<cfset arguments.where = $createScopedWhere(arguments.where,"#$getIdColumn()# #$formatIdForQuery(this[$getParentColumn()])#")>
 		<cfreturn findOne(argumentCollection=arguments)>
 	</cffunction>
 	
@@ -484,8 +487,6 @@
 		</cfif>
 		<cfreturn selfAndAncestors(returnAs="query").RecordCount>
 	</cffunction>
-
-
 
 
 	<cffunction name="selfAndChildren" returntype="any" access="public" output="false" hint="I return the current node and its immediate children.">
@@ -602,8 +603,8 @@
 	-------------------------------------------------------------------------------------
 	------------------------------------------------------------------------------------>
 	
-	<cffunction name="$storeNewParent" returntype="boolean" access="public" output="false">
-		<cfset variables.moveToNewParentId = hasChanged($getParentColumn()) />
+	<cffunction name="$checkForNewParent" returntype="boolean" access="public" output="false">
+		<cfset variables.moveToNewParent = hasChanged($getParentColumn()) />
 		<cfreturn true />
 	</cffunction>
 	
@@ -618,25 +619,19 @@
 			{
 				if (!isSameScope(parent))		
 					$throw(type="Wheels.Plugins.NestedSet.ScopeMismatch",message="The supplied parent is not within the same scope as the item you are trying to insert.");
-				else if (StructKeyExists(variables, "moveToNewParentId") && IsBoolean(variables.moveToNewParentId) && variables.moveToNewParentId)
+				else if (StructKeyExists(variables, "moveToNewParent") && IsBoolean(variables.moveToNewParent) && variables.moveToNewParent)
 					moveToChildOf(parent);
 			}
 			// delete the instance variable
-			StructDelete(variables, "moveToNewParentId", false);
+			StructDelete(variables, "moveToNewParent", false);
 		</cfscript>
 		<cfreturn true />
 	</cffunction>
 	
 	
 	<cffunction name="$setDefaultLeftAndRight" returntype="void" access="public" output="false">
-		<cfscript>
-			this[$getLeftColumn()] = this.maximum(property=$getRightColumn(),reload=true);
-			if (IsNumeric(this[$getLeftColumn()]))
-				this[$getLeftColumn()] = this[$getLeftColumn()] + 1;
-			else
-				this[$getLeftColumn()] = 1;
-			this[$getRightColumn()] = this[$getLeftColumn()] + 1;
-		</cfscript>
+		<cfset this[$getLeftColumn()] = Val(this.maximum(where=$createScopedWhere("", ""), property=$getRightColumn(), reload=true)) + 1>
+		<cfset this[$getRightColumn()] = this[$getLeftColumn()] + 1>
 	</cffunction>
 	
 	<!---
@@ -661,16 +656,22 @@
 			loc.diff = this[$getRightColumn()] - this[$getLeftColumn()] + 1;
 		</cfscript>
 		
-		<cfquery name="loc.query" datasource="#variables.wheels.class.connection.datasource#">
+		<cfquery name="loc.query" attributeCollection="#$getQueryArguments()#">
 			UPDATE 	#tableName()#
 			SET 	#$getLeftColumn()# = #$getLeftColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
 			WHERE	#$getLeftColumn()# > <cfqueryparam cfsqltype="cf_sql_integer" value="#this[$getRightColumn()]#">
+			<cfloop list="#$getScope()#" index="loc.i">
+			AND		#loc.i# = <cfqueryparam cfsqltype="#variables.wheels.class.properties[loc.i].type#" value="#this[loc.i]#">
+			</cfloop>
 		</cfquery>
 		
-		<cfquery name="loc.query" datasource="#variables.wheels.class.connection.datasource#">
+		<cfquery name="loc.query" attributeCollection="#$getQueryArguments()#">
 			UPDATE 	#tableName()#
 			SET 	#$getRightColumn()# = #$getRightColumn()# - <cfqueryparam cfsqltype="cf_sql_integer" value="#loc.diff#">
 			WHERE	#$getRightColumn()# > <cfqueryparam cfsqltype="cf_sql_integer" value="#this[$getRightColumn()]#">
+			<cfloop list="#$getScope()#" index="loc.i">
+			AND		#loc.i# = <cfqueryparam cfsqltype="#variables.wheels.class.properties[loc.i].type#" value="#this[loc.i]#">
+			</cfloop>
 		</cfquery>
 		
 		<cfreturn true />
@@ -678,19 +679,13 @@
 	
 	<!---
 		core private method used to move items around in the tree
-		update should not be scoped since the entire table is one big tree
 	--->
 	<cffunction name="$moveTo" returntype="any" access="public" output="false">
 		<cfargument name="target" type="any" required="true" />
 		<cfargument name="position" type="string" required="true" hint="may be one of 'child, left, right, root'" />
 		<cfscript>
-			var loc = { queryArgs={} };
-			loc.queryArgs.datasource = variables.wheels.class.connection.datasource;
-			if (Len(variables.wheels.class.connection.username))
-				loc.queryArgs.username = variables.instance.connection.username;
-			if (Len(variables.wheels.class.connection.password))
-				loc.queryArgs.password = variables.instance.connection.password;
-
+			var loc = {};
+			
 			if (isNew())
 				$updatePersistedProperties();
 				
@@ -745,7 +740,7 @@
 			}
 		</cfscript>
 		
-		<cfquery name="loc.update" attributeCollection="#loc.queryArgs#">
+		<cfquery name="loc.update" attributeCollection="#$getQueryArguments()#">
 			UPDATE 	#tableName()#
 			SET 	#$getLeftColumn()# =	
 						CASE 
@@ -773,13 +768,12 @@
 										</cfif>
 							ELSE #$getParentColumn()#
 						END
+			WHERE	1 = 1
+			<cfloop list="#$getScope()#" index="loc.i">
+			AND		#loc.i# = <cfqueryparam cfsqltype="#variables.wheels.class.properties[loc.i].type#" value="#this[loc.i]#">
+			</cfloop>
 		</cfquery>
-
-		<cfscript>
-			if (IsObject(arguments.target))
-				arguments.target.reload();
-			this.reload();
-		</cfscript>
+		
 		<cfreturn $callback("afterMove", true) />
 	</cffunction>
 	
@@ -842,6 +836,19 @@
 			else
 				return false;
 		</cfscript>
+	</cffunction>
+	
+	
+	<cffunction name="$getQueryArguments" returntype="struct" access="public" output="false">
+		<cfscript>
+			var loc = {};
+			loc.datasource = variables.wheels.class.connection.datasource;
+			if (Len(variables.wheels.class.connection.username))
+				loc.username = variables.wheels.class.connection.username;
+			if (Len(variables.wheels.class.connection.password))
+				loc.password = variables.wheels.class.connection.password;
+		</cfscript>
+		<cfreturn loc>
 	</cffunction>
 	
 
