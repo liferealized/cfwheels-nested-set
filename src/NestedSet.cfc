@@ -838,7 +838,7 @@
 			if (IsObject(arguments.identifier))
 				return arguments.identifier;
 			else if ($idIsValid(arguments.identifier))
-				return findOne(where="#$getIdColumn()# = #$formatIdForQuery(arguments.identifier)#");
+				return findOne(where="#$getIdColumn()# #$formatIdForQuery(arguments.identifier)#");
 			else
 				return false;
 		</cfscript>
